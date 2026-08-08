@@ -201,6 +201,59 @@ export default function SurveyExecutionPage() {
         </div>
       )}
 
+      {/* Manual GPS Input */}
+      {project.status !== 'APPROVED' && (
+        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-3">
+          <p className="text-xs font-medium text-slate-400 mb-2">Input Koordinat Manual (opsional)</p>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="text-[10px] text-slate-500 mb-0.5 block">Latitude</label>
+              <input
+                type="number"
+                step="any"
+                placeholder="-6.123456"
+                value={gps?.latitude ?? ''}
+                onChange={(e) => {
+                  const lat = parseFloat(e.target.value)
+                  setGps(prev => ({
+                    latitude: isNaN(lat) ? 0 : lat,
+                    longitude: prev?.longitude ?? 0,
+                    accuracy: prev?.accuracy ?? 0,
+                  }))
+                }}
+                className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] text-slate-500 mb-0.5 block">Longitude</label>
+              <input
+                type="number"
+                step="any"
+                placeholder="106.123456"
+                value={gps?.longitude ?? ''}
+                onChange={(e) => {
+                  const lng = parseFloat(e.target.value)
+                  setGps(prev => ({
+                    latitude: prev?.latitude ?? 0,
+                    longitude: isNaN(lng) ? 0 : lng,
+                    accuracy: prev?.accuracy ?? 0,
+                  }))
+                }}
+                className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            {gps && (
+              <button
+                onClick={() => setGps(null)}
+                className="text-xs text-red-400 hover:text-red-300 px-2 py-1.5 border border-red-500/20 rounded-lg bg-red-500/5 hover:bg-red-500/10 transition-colors whitespace-nowrap"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Areas Tabs */}
       <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2">
         {areas.map((area: any, index: number) => (
@@ -286,43 +339,63 @@ export default function SurveyExecutionPage() {
 
 function SurveyItemForm({ project, area, item, gps, onBack, onSave }: any) {
   const [loading, setLoading] = useState(false)
+
+  // Find existing survey data for this area+item
+  const existingSurvey = project.surveys?.find(
+    (s: any) => s.areaName === area.name && s.itemName === item.name
+  )
+
   const [formData, setFormData] = useState<any>({
-    status: 'EXISTING',
-    priority: 'MEDIUM',
-    existingCondition: '',
-    observation: '',
-    recommendation: ''
+    status: existingSurvey?.status || 'EXISTING',
+    priority: existingSurvey?.priority || 'MEDIUM',
+    existingCondition: existingSurvey?.existingCondition || '',
+    observation: existingSurvey?.observation || '',
+    recommendation: existingSurvey?.recommendation || ''
   })
   
-  // Initialize checklist state
-  const [checklists, setChecklists] = useState(
-    (item.checklists || []).map((c: any) => ({
-      checklistId: c.id,
-      name: c.name,
-      checked: false
-    }))
-  )
+  // Initialize checklist state — merge template checklists with saved data
+  const [checklists, setChecklists] = useState(() => {
+    return (item.checklists || []).map((c: any) => {
+      const saved = existingSurvey?.checklists?.find(
+        (sc: any) => sc.checklistId === c.id
+      )
+      return {
+        checklistId: c.id,
+        name: c.name,
+        checked: saved ? saved.checked : false
+      }
+    })
+  })
 
-  // Initialize dynamic fields state
-  const [dynamicData, setDynamicData] = useState(
-    (item.dynamicFields || []).map((f: any) => ({
-      fieldId: f.id,
-      fieldType: f.fieldType,
-      fieldName: f.label,
-      value: ''
-    }))
-  )
+  // Initialize dynamic fields state — merge template fields with saved data
+  const [dynamicData, setDynamicData] = useState(() => {
+    return (item.dynamicFields || []).map((f: any) => {
+      const saved = existingSurvey?.dynamicData?.find(
+        (sd: any) => sd.fieldId === f.id
+      )
+      return {
+        fieldId: f.id,
+        fieldType: f.fieldType,
+        fieldName: f.label,
+        value: saved ? saved.value || '' : ''
+      }
+    })
+  })
 
-  const [photos, setPhotos] = useState<string[]>([])
+  // Initialize photos from existing survey (show already-uploaded photos)
+  const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>(
+    () => existingSurvey?.photos?.map((p: any) => p.path) || []
+  )
+  const [newPhotos, setNewPhotos] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Basic save logic
   const handleSave = async () => {
     setLoading(true)
     try {
-      // 1. Upload photos first and collect URLs
+      // 1. Upload NEW photos only and collect URLs
       const uploadedPhotoUrls: string[] = []
-      for (const base64 of photos) {
+      for (const base64 of newPhotos) {
         const upRes = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -334,7 +407,10 @@ function SurveyItemForm({ project, area, item, gps, onBack, onSave }: any) {
         }
       }
 
-      // 2. Save Survey Data with photo URLs
+      // 2. Combine existing photo URLs with newly uploaded ones
+      const allPhotoUrls = [...existingPhotoUrls, ...uploadedPhotoUrls]
+
+      // 3. Save Survey Data with all photo URLs
       const res = await fetch('/api/surveys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -346,7 +422,7 @@ function SurveyItemForm({ project, area, item, gps, onBack, onSave }: any) {
           gpsLat: gps?.latitude,
           gpsLng: gps?.longitude,
           gpsAccuracy: gps?.accuracy,
-          photos: uploadedPhotoUrls,
+          photos: allPhotoUrls,
           checklists,
           dynamicData
         })
@@ -386,7 +462,7 @@ function SurveyItemForm({ project, area, item, gps, onBack, onSave }: any) {
           longitude: gps?.longitude,
           accuracy: gps?.accuracy,
         })
-        setPhotos(prev => [...prev, watermarkedImage])
+        setNewPhotos(prev => [...prev, watermarkedImage])
       }
       reader.readAsDataURL(file)
     } catch (err) {
@@ -503,42 +579,91 @@ function SurveyItemForm({ project, area, item, gps, onBack, onSave }: any) {
         {dynamicData.length > 0 && (
           <div className="pt-4 border-t border-slate-800 space-y-4">
             <h4 className="text-sm font-medium text-slate-300 mb-3">Data Tambahan</h4>
-            {dynamicData.map((d: any, idx: number) => (
-              <div key={d.fieldId} className="space-y-1.5">
-                <label className="block text-sm font-medium text-slate-300">{d.fieldName}</label>
-                {d.fieldType === 'TEXT' ? (
+            {dynamicData.map((d: any, idx: number) => {
+              const handleChange = (val: string) => {
+                const newData = [...dynamicData]
+                newData[idx].value = val
+                setDynamicData(newData)
+              }
+
+              const commonClasses = "w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1"
+
+              let inputElement = (
+                <input
+                  type="text"
+                  value={d.value}
+                  onChange={(e) => handleChange(e.target.value)}
+                  className={commonClasses}
+                />
+              )
+
+              if (d.fieldType === 'Number' || d.fieldType === 'Currency') {
+                inputElement = (
                   <input
-                    type="text"
+                    type="number"
                     value={d.value}
-                    onChange={(e) => {
-                      const newData = [...dynamicData]
-                      newData[idx].value = e.target.value
-                      setDynamicData(newData)
-                    }}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1"
+                    onChange={(e) => handleChange(e.target.value)}
+                    className={commonClasses}
                   />
-                ) : (
+                )
+              } else if (d.fieldType === 'Date') {
+                inputElement = (
+                  <input
+                    type="date"
+                    value={d.value}
+                    onChange={(e) => handleChange(e.target.value)}
+                    className={commonClasses}
+                    style={{ colorScheme: 'dark' }}
+                  />
+                )
+              } else if (d.fieldType === 'Time') {
+                inputElement = (
+                  <input
+                    type="time"
+                    value={d.value}
+                    onChange={(e) => handleChange(e.target.value)}
+                    className={commonClasses}
+                    style={{ colorScheme: 'dark' }}
+                  />
+                )
+              } else if (d.fieldType === 'Checkbox' || d.fieldType === 'Toggle') {
+                inputElement = (
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={d.value === 'Ya'}
+                      onChange={(e) => handleChange(e.target.checked ? 'Ya' : 'Tidak')}
+                      className="w-5 h-5 text-blue-600 rounded bg-slate-900 border-slate-700 focus:ring-blue-500 focus:ring-offset-slate-900"
+                    />
+                    <span className="text-sm text-slate-400">{d.value === 'Ya' ? 'Ya / Ada / True' : 'Tidak / Kosong / False'}</span>
+                  </div>
+                )
+              } else if (d.fieldType === 'Textarea') {
+                inputElement = (
                   <textarea
                     value={d.value}
-                    onChange={(e) => {
-                      const newData = [...dynamicData]
-                      newData[idx].value = e.target.value
-                      setDynamicData(newData)
-                    }}
-                    rows={2}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1"
+                    onChange={(e) => handleChange(e.target.value)}
+                    rows={3}
+                    className={commonClasses}
                   />
-                )}
-              </div>
-            ))}
+                )
+              }
+
+              return (
+                <div key={d.fieldId} className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-300">{d.fieldName}</label>
+                  {inputElement}
+                </div>
+              )
+            })}
           </div>
         )}
 
-        {/* Camera Section placeholder */}
+        {/* Camera Section */}
         <div className="pt-4 border-t border-slate-800">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-slate-300">Foto / Dokumentasi</h4>
-            <span className="text-xs text-slate-500">{photos.length} Foto</span>
+            <span className="text-xs text-slate-500">{existingPhotoUrls.length + newPhotos.length} Foto</span>
           </div>
           
           <input 
@@ -551,11 +676,26 @@ function SurveyItemForm({ project, area, item, gps, onBack, onSave }: any) {
           />
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-            {photos.map((photo, idx) => (
-              <div key={idx} className="relative aspect-[3/4] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden group">
-                <img src={photo} alt={`Foto ${idx+1}`} className="w-full h-full object-cover" />
+            {/* Existing saved photos */}
+            {existingPhotoUrls.map((photoUrl, idx) => (
+              <div key={`existing-${idx}`} className="relative aspect-[3/4] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden group">
+                <img src={photoUrl} alt={`Foto ${idx+1}`} className="w-full h-full object-cover" />
+                <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-emerald-500/80 rounded text-[9px] text-white font-bold">Tersimpan</div>
                 <button 
-                  onClick={() => setPhotos(photos.filter((_, i) => i !== idx))}
+                  onClick={() => setExistingPhotoUrls(existingPhotoUrls.filter((_, i) => i !== idx))}
+                  className="absolute top-2 right-2 w-6 h-6 bg-red-500/80 hover:bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            {/* Newly captured photos */}
+            {newPhotos.map((photo, idx) => (
+              <div key={`new-${idx}`} className="relative aspect-[3/4] bg-slate-900 rounded-xl border border-blue-500/30 overflow-hidden group">
+                <img src={photo} alt={`Foto baru ${idx+1}`} className="w-full h-full object-cover" />
+                <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-blue-500/80 rounded text-[9px] text-white font-bold">Baru</div>
+                <button 
+                  onClick={() => setNewPhotos(newPhotos.filter((_, i) => i !== idx))}
                   className="absolute top-2 right-2 w-6 h-6 bg-red-500/80 hover:bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md"
                 >
                   <X className="w-3 h-3" />

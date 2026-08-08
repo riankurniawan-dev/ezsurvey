@@ -26,7 +26,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           }
         },
         surveys: {
-          include: { photos: true },
+          include: {
+            photos: true,
+            checklists: { include: { checklist: true } },
+            dynamicData: true,
+          },
           orderBy: [{ areaName: 'asc' }, { itemName: 'asc' }]
         },
       }

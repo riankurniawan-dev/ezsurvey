@@ -47,7 +47,7 @@ sudo mysql -u root -p
 Jalankan perintah berikut untuk membuat database dan user:
 ```sql
 CREATE DATABASE ezsurvey;
-CREATE USER 'ezsurvey_user'@'localhost' IDENTIFIED BY 'PasswordKuatAnda123!';
+CREATE USER 'ezsurvey_user'@'localhost' IDENTIFIED BY 'Vps@rianhost123';
 GRANT ALL PRIVILEGES ON ezsurvey.* TO 'ezsurvey_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
@@ -76,7 +76,7 @@ nano .env
 Isi dengan konfigurasi berikut (sesuaikan dengan database Anda):
 ```env
 # Koneksi Database
-DATABASE_URL="mysql://ezsurvey_user:PasswordKuatAnda123!@localhost:3306/ezsurvey"
+DATABASE_URL="mysql://ezsurvey_user:Vps%40rianhost123@localhost:3306/ezsurvey"
 
 # NextAuth Configuration
 NEXTAUTH_SECRET="buat_secret_key_acak_yang_panjang_dan_aman_disini"
@@ -104,9 +104,9 @@ npm run build
 
 ## 6. Menjalankan Aplikasi dengan PM2
 
-Jalankan aplikasi Next.js (secara default akan berjalan di port 3000):
+Jalankan aplikasi Next.js (secara default akan berjalan di port 3000, tapi kita ubah ke 3001 agar tidak bentrok):
 ```bash
-pm2 start npm --name "ezsurvey" -- run start
+pm2 start npm --name "ezsurvey" -- run start -- -p 3001
 ```
 Untuk memastikan aplikasi berjalan otomatis saat server di-restart (reboot):
 ```bash
@@ -127,8 +127,8 @@ Isi dengan konfigurasi berikut:
     ServerName domain-anda.com
     
     ProxyPreserveHost On
-    ProxyPass / http://localhost:3000/
-    ProxyPassReverse / http://localhost:3000/
+    ProxyPass / http://localhost:3001/
+    ProxyPassReverse / http://localhost:3001/
 
     ErrorLog ${APACHE_LOG_DIR}/ezsurvey_error.log
     CustomLog ${APACHE_LOG_DIR}/ezsurvey_access.log combined

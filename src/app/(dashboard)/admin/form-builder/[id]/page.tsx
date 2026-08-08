@@ -6,7 +6,9 @@ import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { ArrowLeft, Plus, Save, Trash2, GripVertical, Settings2, Loader2 } from 'lucide-react'
+import { Plus, Edit2, Trash2, Search, Loader2, FileText, LayoutTemplate, GripVertical, Settings2, Save, ArrowLeft } from 'lucide-react'
+import Swal from 'sweetalert2'
+import { v4 as uuidv4 } from 'uuid'
 
 // Types
 type FieldConfig = {
@@ -61,14 +63,14 @@ export default function FormBuilderPage() {
           if (data.areas) {
             // Transform data back to builder state if needed, here we just use it directly
             const mappedAreas = data.areas.map((area: any) => ({
-              id: area.id || crypto.randomUUID(),
+              id: area.id || uuidv4(),
               name: area.name,
               items: area.items.map((item: any) => ({
-                id: item.id || crypto.randomUUID(),
+                id: item.id || uuidv4(),
                 name: item.name,
-                checklists: item.checklists?.map((c: any) => ({ id: c.id || crypto.randomUUID(), name: c.name })) || [],
+                checklists: item.checklists?.map((c: any) => ({ id: c.id || uuidv4(), name: c.name })) || [],
                 dynamicFields: item.dynamicFields?.map((f: any) => ({
-                  id: f.id || crypto.randomUUID(),
+                  id: f.id || uuidv4(),
                   fieldType: f.fieldType,
                   label: f.label,
                   placeholder: f.placeholder,
@@ -91,7 +93,7 @@ export default function FormBuilderPage() {
 
   // --- Handlers ---
   const addArea = () => {
-    setAreas([...areas, { id: crypto.randomUUID(), name: 'Area Baru', items: [] }])
+    setAreas([...areas, { id: uuidv4(), name: 'Area Baru', items: [] }])
   }
   const updateArea = (areaId: string, name: string) => {
     setAreas(areas.map(a => a.id === areaId ? { ...a, name } : a))
@@ -105,7 +107,7 @@ export default function FormBuilderPage() {
       if (a.id === areaId) {
         return {
           ...a,
-          items: [...a.items, { id: crypto.randomUUID(), name: 'Item Survey Baru', checklists: [], dynamicFields: [] }]
+          items: [...a.items, { id: uuidv4(), name: 'Item Survey Baru', checklists: [], dynamicFields: [] }]
         }
       }
       return a
@@ -129,7 +131,7 @@ export default function FormBuilderPage() {
       ...a,
       items: a.items.map(i => i.id === itemId ? {
         ...i,
-        checklists: [...i.checklists, { id: crypto.randomUUID(), name: 'Pekerjaan Check' }]
+        checklists: [...i.checklists, { id: uuidv4(), name: 'Pekerjaan Check' }]
       } : i)
     } : a))
   }
@@ -157,7 +159,7 @@ export default function FormBuilderPage() {
       ...a,
       items: a.items.map(i => i.id === itemId ? {
         ...i,
-        dynamicFields: [...i.dynamicFields, { id: crypto.randomUUID(), fieldType: 'Text', label: 'Field Baru', required: false }]
+        dynamicFields: [...i.dynamicFields, { id: uuidv4(), fieldType: 'Text', label: 'Field Baru', required: false }]
       } : i)
     } : a))
   }
@@ -189,11 +191,34 @@ export default function FormBuilderPage() {
         body: JSON.stringify({ areas })
       })
       if (res.ok) {
+        await Swal.fire({
+          title: 'Berhasil!',
+          text: 'Template berhasil disimpan.',
+          icon: 'success',
+          background: '#0f172a',
+          color: '#f8fafc',
+          confirmButtonColor: '#3b82f6',
+        })
         router.push('/admin/templates')
         router.refresh()
+      } else {
+        Swal.fire({
+          title: 'Gagal',
+          text: 'Gagal menyimpan template. Silakan coba lagi.',
+          icon: 'error',
+          background: '#0f172a',
+          color: '#f8fafc',
+        })
       }
     } catch (err) {
       console.error(err)
+      Swal.fire({
+        title: 'Error',
+        text: 'Terjadi kesalahan koneksi. Silakan coba lagi.',
+        icon: 'error',
+        background: '#0f172a',
+        color: '#f8fafc',
+      })
     } finally {
       setSaving(false)
     }
