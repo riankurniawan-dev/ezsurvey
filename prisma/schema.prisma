@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(SURVEYOR)
+  avatar        String?
+  phone         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects      Project[]
+  surveys       Survey[]
+  comments      Comment[]
+  signatures    Signature[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  revisions     RevisionHistory[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  SURVEYOR
+  SUPERVISOR
+  MANAGER
+  CLIENT
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?  @db.Text
+  phone     String?
+  email     String?
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects  Project[]
+
+  @@map("clients")
+}
+
+model SurveyTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  areas       TemplateArea[]
+  projects    Project[]
+
+  @@map("survey_templates")
+}
+
+model TemplateArea {
+  id         String   @id @default(uuid())
+  name       String
+  sortOrder  Int      @default(0)
+  templateId String
+  template   SurveyTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  items      TemplateItem[]
+
+  @@map("template_areas")
+}
+
+model TemplateItem {
+  id        String   @id @default(uuid())
+  name      String
+  sortOrder Int      @default(0)
+  areaId    String
+  area      TemplateArea @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  checklists    TemplateChecklist[]
+  dynamicFields DynamicFormField[]
+
+  @@map("template_items")
+}
+
+model TemplateChecklist {
+  id        String   @id @default(uuid())
+  name      String
+  sortOrder Int      @default(0)
+  itemId    String
+  item      TemplateItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  surveyChecklists SurveyChecklist[]
+
+  @@map("template_checklists")
+}
+
+model DynamicFormField {
+  id               String   @id @default(uuid())
+  fieldType        String
+  label            String
+  placeholder      String?
+  options          String?  @db.Text
+  required         Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  conditionalLogic String?  @db.Text
+  itemId           String
+  item             TemplateItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("dynamic_form_fields")
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  location    String?
+  site        String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      ProjectStatus @default(DRAFT)
+  clientId    String?
+  client      Client?       @relation(fields: [clientId], references: [id])
+  templateId  String
+  template    SurveyTemplate @relation(fields: [templateId], references: [id])
+  surveyorId  String
+  surveyor    User          @relation(fields: [surveyorId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  surveys     Survey[]
+
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  REVISION
+  APPROVED
+  CLOSED
+}
+
+model Survey {
+  id                String       @id @default(uuid())
+  projectId         String
+  project           Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  areaName          String
+  itemName          String
+  status            ItemStatus   @default(EXISTING)
+  priority          Priority     @default(MEDIUM)
+  location          String?
+  gpsLat            Float?
+  gpsLng            Float?
+  gpsAccuracy       Float?
+  gpsTimestamp      DateTime?
+  existingCondition String?      @db.Text
+  observation       String?      @db.Text
+  recommendation    String?      @db.Text
+  materialExisting  String?      @db.Text
+  estimasiMaterial  String?      @db.Text
+  estimasiPekerjaan String?      @db.Text
+  conclusion        String?      @db.Text
+  userId            String
+  user              User         @relation(fields: [userId], references: [id])
+  assetId           String?
+  asset             Asset?       @relation(fields: [assetId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  checklists         SurveyChecklist[]
+  dynamicData        SurveyDynamicData[]
+  photos             Photo[]
+  attachments        Attachment[]
+  comments           Comment[]
+  signatures         Signature[]
+  revisions          RevisionHistory[]
+  repeatableSections RepeatableSection[]
+
+  @@map("surveys")
+}
+
+enum ItemStatus {
+  EXISTING
+  TIDAK_ADA
+  RUSAK
+  PERLU_PERBAIKAN
+  PERLU_PENGGANTIAN
+  PERLU_INSTALASI
+  SELESAI
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model SurveyChecklist {
+  id          String   @id @default(uuid())
+  surveyId    String
+  survey      Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  checklistId String
+  checklist   TemplateChecklist @relation(fields: [checklistId], references: [id])
+  checked     Boolean  @default(false)
+
+  @@map("survey_checklists")
+}
+
+model SurveyDynamicData {
+  id        String  @id @default(uuid())
+  surveyId  String
+  survey    Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  fieldId   String
+  fieldType String
+  fieldName String
+  value     String? @db.Text
+
+  @@map("survey_dynamic_data")
+}
+
+model Photo {
+  id        String        @id @default(uuid())
+  surveyId  String
+  survey    Survey        @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  category  PhotoCategory @default(EXISTING)
+  path      String
+  caption   String?       @db.Text
+  gpsLat    Float?
+  gpsLng    Float?
+  timestamp DateTime      @default(now())
+
+  @@map("photos")
+}
+
+enum PhotoCategory {
+  EXISTING
+  BEFORE
+  DURING
+  AFTER
+  DETAIL
+  PANEL
+  NAMEPLATE
+  WIRING
+  INSTALLATION
+  TESTING
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  filename  String
+  path      String
+  type      String
+  size      Int
+  createdAt DateTime @default(now())
+
+  @@map("attachments")
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  surveyId  String
+  survey    Survey    @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  content   String    @db.Text
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+  createdAt DateTime  @default(now())
+
+  @@map("comments")
+}
+
+model Signature {
+  id            String   @id @default(uuid())
+  surveyId      String
+  survey        Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  signatureRole String
+  signatureData String   @db.LongText
+  signedAt      DateTime @default(now())
+
+  @@map("signatures")
+}
+
+model Asset {
+  id           String   @id @default(uuid())
+  name         String
+  type         String
+  serialNumber String?
+  location     String?
+  description  String?  @db.Text
+  qrCode       String?  @db.Text
+  status       String   @default("Active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  surveys      Survey[]
+
+  @@map("assets")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model RepeatableSection {
+  id          String @id @default(uuid())
+  surveyId    String
+  survey      Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  sectionName String
+  data        String @db.LongText
+
+  @@map("repeatable_sections")
+}
+
+model RevisionHistory {
+  id        String   @id @default(uuid())
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  changes   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("revision_history")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String   @db.LongText
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
